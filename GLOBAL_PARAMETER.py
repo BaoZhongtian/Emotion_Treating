@@ -13,3 +13,4 @@ MAX_GRAD_NORM = 1.0
 
 CLASS_NUMBER = 4
 EMOTION_LABEL = {'ang': 0, 'hap': 1, 'neu': 2, 'sad': 3}
+FEATURE_SHAPE = {'Audio': 40, 'Video': 168}

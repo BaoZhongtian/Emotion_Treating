@@ -11,7 +11,8 @@ class IEMOCAP_Dataset_SingleMedia(Dataset):
     def __init__(self, treat_data):
         self.data, self.label = [], []
         for treat_sample in treat_data:
-            self.data.append(treat_sample['Audio'])
+            if 'Audio' in treat_sample.keys(): self.data.append(treat_sample['Audio'])
+            if 'Video' in treat_sample.keys(): self.data.append(treat_sample['Video'])
             self.label.append(EMOTION_LABEL[treat_sample['Emotion']])
 
     def __len__(self):
@@ -57,15 +58,24 @@ class Loader_IEMOCAP:
                         self.audio_total_data.extend(current_data)
                         print('Load Audio Session', session_index, gender_name, part_name, 'Completed',
                               len(self.audio_total_data))
-                    if fast_part_load_flag: break
-                if fast_part_load_flag: break
+                if fast_part_load_flag and session_index > 1: break
 
             print('Audio Data Load Completed')
             print('Total', len(self.audio_total_data), 'Samples.')
 
         if video_flag:
-            raise NotImplemented
-            # Not Completed Here
+            self.video_total_data = []
+
+            for session_index in range(1, 6):
+                for gender_name in ['Female', 'Male']:
+                    for part_name in consider_part:
+                        current_data = json.load(
+                            open(os.path.join(IEMOCAP_JSON_PATH, 'IEMOCAP_Video_%s_%s_Session%d.json' % (
+                                part_name, gender_name, session_index)), 'r'))
+                        self.video_total_data.extend(current_data)
+                        print('Load Video Session', session_index, gender_name, part_name, 'Completed',
+                              len(self.video_total_data))
+                if fast_part_load_flag and session_index > 1: break
 
         if self.audio_total_data is None and self.video_total_data is None:
             assert RuntimeError('Please Input at least one Media.')
@@ -84,13 +94,29 @@ class Loader_IEMOCAP:
                     audio_test_data.append(treat_sample)
 
             print(len(audio_train_data), len(audio_val_data), len(audio_test_data))
-            train_loader = self.CollateBatch_SingleMedia(audio_train_data, batch_size, shuffle_flag=True)
-            val_loader = self.CollateBatch_SingleMedia(audio_val_data, batch_size, shuffle_flag=False)
-            test_loader = self.CollateBatch_SingleMedia(audio_test_data, batch_size, shuffle_flag=False)
-            return train_loader, val_loader, test_loader
+            if self.video_total_data is None:
+                train_loader = self.CollateBatch_SingleMedia(audio_train_data, batch_size, shuffle_flag=True)
+                val_loader = self.CollateBatch_SingleMedia(audio_val_data, batch_size, shuffle_flag=False)
+                test_loader = self.CollateBatch_SingleMedia(audio_test_data, batch_size, shuffle_flag=False)
+                return train_loader, val_loader, test_loader
 
         if self.video_total_data is not None:
-            assert NotImplemented
+            video_train_data, video_val_data, video_test_data = [], [], []
+            for treat_sample in self.video_total_data:
+                if int(treat_sample['Session'][-1]) != appoint_session:
+                    video_train_data.append(treat_sample)
+                if int(treat_sample['Session'][-1]) == appoint_session and treat_sample['Gender'] != appoint_gender:
+                    video_val_data.append(treat_sample)
+                if int(treat_sample['Session'][-1]) == appoint_session and treat_sample['Gender'] == appoint_gender:
+                    video_test_data.append(treat_sample)
+            print(len(video_train_data), len(video_val_data), len(video_test_data))
+
+            if self.audio_total_data is None:
+                train_loader = self.CollateBatch_SingleMedia(video_train_data, batch_size, shuffle_flag=True)
+                val_loader = self.CollateBatch_SingleMedia(video_val_data, batch_size, shuffle_flag=False)
+                test_loader = self.CollateBatch_SingleMedia(video_test_data, batch_size, shuffle_flag=False)
+
+                return train_loader, val_loader, test_loader
 
     def CollateBatch_SingleMedia(self, treat_data, batch_size, shuffle_flag):
         treat_dataset = IEMOCAP_Dataset_SingleMedia(treat_data)
@@ -100,5 +126,5 @@ class Loader_IEMOCAP:
 
 
 if __name__ == '__main__':
-    dataset = Loader_IEMOCAP(audio_flag=True, consider_part=['improve'], fast_part_load_flag=True)
+    dataset = Loader_IEMOCAP(video_flag=True, consider_part=['improve'], fast_part_load_flag=True)
     dataset.TrainValTestSeparate(appoint_session=1, appoint_gender='Female', batch_size=8)
